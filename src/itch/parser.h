@@ -55,7 +55,30 @@ class Parser {
       buf_remainder_size_ = 0;
     }
 
-    // TODO: parsing loop for buf
+    while (size > 0) {
+      if (size == 1) {
+        std::memcpy(buf_remainder_.data(), buf, size);
+        buf_remainder_size_ = size;
+        break;
+      }
+
+      uint16_t message_size = ReadBe16(buf);
+      if (message_size > kMaxMessageSize || message_size == 0) {
+        throw std::runtime_error("Invalid message size.");
+      }
+
+      if (size < static_cast<size_t>(message_size) + 2) {
+        std::memcpy(buf_remainder_.data(), buf, size);
+        buf_remainder_size_ = size;
+        break;
+      }
+
+      buf += 2;
+      size -= 2;
+      ParseMessage(buf, message_size);
+      buf += message_size;
+      size -= message_size;
+    }
   }
 
  private:
@@ -66,8 +89,9 @@ class Parser {
   std::array<unsigned char, kMaxMessageSize + 1> buf_remainder_;
   std::size_t buf_remainder_size_ = 0;
 
-  void ParseMessage(const unsigned char* buf, const std::size_t size) {
-    // TODO: parse a given complete message from given buf
+  void ParseMessage(const unsigned char* buf, const std::size_t /*size*/) {
+    unsigned char message_type = buf[0];
+    handler_.OnMessage(message_type);
   }
 };
 }  // namespace itch

@@ -9,24 +9,32 @@
 #include <cstdint>
 
 namespace itch {
-inline constexpr uint16_t ReadBe16(const unsigned char* /*buf*/) {
-  // TODO: read big-endian 2 bytes from buf
-  return {};
+inline constexpr uint16_t ReadBe16(const unsigned char* buf) {
+  return (static_cast<uint16_t>(buf[0]) << 8) | static_cast<uint16_t>(buf[1]);
 }
 
-inline constexpr uint32_t ReadBe32(const unsigned char* /*buf*/) {
-  // TODO: read big-endian 4 bytes from buf
-  return {};
+inline constexpr uint32_t ReadBe32(const unsigned char* buf) {
+  return (static_cast<uint32_t>(buf[0]) << 24) |
+         (static_cast<uint32_t>(buf[1]) << 16) |
+         (static_cast<uint32_t>(buf[2]) << 8) | static_cast<uint32_t>(buf[3]);
 }
 
-inline constexpr uint64_t ReadBe48(const unsigned char* /*buf*/) {
-  // TODO: read big-endian 6 bytes from buf
-  return {};
+inline constexpr uint64_t ReadBe48(const unsigned char* buf) {
+  return (static_cast<uint64_t>(buf[0]) << 40) |
+         (static_cast<uint64_t>(buf[1]) << 32) |
+         (static_cast<uint64_t>(buf[2]) << 24) |
+         (static_cast<uint64_t>(buf[3]) << 16) |
+         (static_cast<uint64_t>(buf[4]) << 8) | static_cast<uint64_t>(buf[5]);
 }
 
-inline constexpr uint64_t ReadBe64(const unsigned char* /*buf*/) {
-  // TODO: read big-endian 8 bytes from buf
-  return {};
+inline constexpr uint64_t ReadBe64(const unsigned char* buf) {
+  return (static_cast<uint64_t>(buf[0]) << 56) |
+         (static_cast<uint64_t>(buf[1]) << 48) |
+         (static_cast<uint64_t>(buf[2]) << 40) |
+         (static_cast<uint64_t>(buf[3]) << 32) |
+         (static_cast<uint64_t>(buf[4]) << 24) |
+         (static_cast<uint64_t>(buf[5]) << 16) |
+         (static_cast<uint64_t>(buf[6]) << 8) | static_cast<uint64_t>(buf[7]);
 }
 }  // namespace itch
 
