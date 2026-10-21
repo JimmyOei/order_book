@@ -1,0 +1,14 @@
+{
+  // clangd provides diagnostics and completion; turn off the Microsoft engine
+  // so the two don't report duplicate (and conflicting) errors.
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "clangd.arguments": [
+    "--compile-commands-dir=${workspaceFolder}",
+    "--clang-tidy",
+    "--header-insertion=never"
+  ],
+  "[cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+    "editor.formatOnSave": true
+  }
+}

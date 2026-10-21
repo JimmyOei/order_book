@@ -44,4 +44,5 @@ CheckOptions:
   - { key: readability-identifier-naming.EnumConstantPrefix,     value: k }
   - { key: readability-identifier-naming.NamespaceCase,          value: lower_case }
   - { key: readability-identifier-naming.MacroDefinitionCase,    value: UPPER_CASE }
+  - { key: readability-identifier-naming.MacroDefinitionIgnoredRegexp, value: '^[A-Z0-9_]+_H_$' }
 ...
