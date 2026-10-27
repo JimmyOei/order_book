@@ -89,8 +89,8 @@ class Parser {
   Handler& handler_;
 
   // Maximum remainder size is
-  // max message size + bytes indicating message size (= 2) - 1
-  std::array<unsigned char, kMaxMessageLength + 1> buf_remainder_;
+  // max message size + bytes indicating message size (= 2)
+  std::array<unsigned char, kMaxMessageLength + 2> buf_remainder_;
   std::size_t buf_remainder_size_ = 0;
 
   void ParseMessage(const unsigned char* buf, const std::size_t size) {

@@ -45,7 +45,7 @@ constexpr std::array<uint8_t, 256> MakeMessageLengths() {
 inline constexpr std::array<uint8_t, 256> kMessageLengths =
     MakeMessageLengths();
 inline constexpr std::size_t kMaxMessageLength =
-    *std::max_element(kMessageLengths.begin(), kMessageLengths.end());
+    std::ranges::max(kMessageLengths);
 }  // namespace itch
 
 #endif  // ORDER_BOOK_SRC_ITCH_MESSAGES_H_
