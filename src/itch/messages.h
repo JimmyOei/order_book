@@ -46,6 +46,52 @@ inline constexpr std::array<uint8_t, 256> kMessageLengths =
     MakeMessageLengths();
 inline constexpr std::size_t kMaxMessageLength =
     std::ranges::max(kMessageLengths);
+
+enum class BuySellIndicator : uint8_t { kBuy = 'B', kSell = 'S' };
+
+// For message types "A" and "F"
+struct AddOrderMessage {
+  uint64_t reference_number;
+  uint64_t timestamp;
+  std::array<char, 8> stock;
+  uint32_t shares;
+  uint32_t price;
+  uint16_t stock_locate;
+  BuySellIndicator buy_sell_indicator;
+};
+
+// For message types "E" and "C"
+struct ExecuteOrderMessage {
+  uint64_t reference_number;
+  uint64_t timestamp;
+  uint32_t shares;
+  uint16_t stock_locate;
+};
+
+// For message types "X"
+struct CancelOrderMessage {
+  uint64_t reference_number;
+  uint64_t timestamp;
+  uint32_t shares;
+  uint16_t stock_locate;
+};
+
+// For message types "D"
+struct DeleteOrderMessage {
+  uint64_t reference_number;
+  uint64_t timestamp;
+  uint16_t stock_locate;
+};
+
+// For message types "U"
+struct ReplaceOrderMessage {
+  uint64_t original_reference_number;
+  uint64_t new_reference_number;
+  uint64_t timestamp;
+  uint32_t shares;
+  uint32_t price;
+  uint16_t stock_locate;
+};
 }  // namespace itch
 
 #endif  // ORDER_BOOK_SRC_ITCH_MESSAGES_H_

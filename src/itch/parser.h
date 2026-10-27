@@ -106,7 +106,84 @@ class Parser {
           "Found a message with incorrect message length.");
     }
 
-    handler_.OnMessage(message_type);
+    if constexpr (requires(const unsigned char& t) { handler_.OnMessage(t); }) {
+      handler_.OnMessage(message_type);
+    }
+
+    switch (message_type) {
+      case 'A':
+      case 'F':
+        if constexpr (requires(const AddOrderMessage& m) {
+                        handler_.OnAddOrderMessage(m);
+                      }) {
+          AddOrderMessage message;
+          message.reference_number = ReadBe64(&buf[11]);
+          message.timestamp = ReadBe48(&buf[5]);
+          message.shares = ReadBe32(&buf[20]);
+          message.price = ReadBe32(&buf[32]);
+          message.stock_locate = ReadBe16(&buf[1]);
+
+          if (buf[19] != 'B' && buf[19] != 'S') {
+            throw std::runtime_error(
+                "Invalid Buy/Sell Indicator for Add Order message.");
+          }
+          message.buy_sell_indicator = static_cast<BuySellIndicator>(buf[19]);
+
+          std::memcpy(message.stock.data(), &buf[24], sizeof(message.stock));
+
+          handler_.OnAddOrderMessage(message);
+        }
+        return;
+      case 'E':
+      case 'C':
+        if constexpr (requires(const ExecuteOrderMessage& m) {
+                        handler_.OnExecuteOrderMessage(m);
+                      }) {
+          ExecuteOrderMessage message{.reference_number = ReadBe64(&buf[11]),
+                                      .timestamp = ReadBe48(&buf[5]),
+                                      .shares = ReadBe32(&buf[19]),
+                                      .stock_locate = ReadBe16(&buf[1])};
+          handler_.OnExecuteOrderMessage(message);
+        }
+        return;
+      case 'X':
+        if constexpr (requires(const CancelOrderMessage& m) {
+                        handler_.OnCancelOrderMessage(m);
+                      }) {
+          CancelOrderMessage message{.reference_number = ReadBe64(&buf[11]),
+                                     .timestamp = ReadBe48(&buf[5]),
+                                     .shares = ReadBe32(&buf[19]),
+                                     .stock_locate = ReadBe16(&buf[1])};
+          handler_.OnCancelOrderMessage(message);
+        }
+        return;
+      case 'D':
+        if constexpr (requires(const DeleteOrderMessage& m) {
+                        handler_.OnDeleteOrderMessage(m);
+                      }) {
+          DeleteOrderMessage message{.reference_number = ReadBe64(&buf[11]),
+                                     .timestamp = ReadBe48(&buf[5]),
+                                     .stock_locate = ReadBe16(&buf[1])};
+          handler_.OnDeleteOrderMessage(message);
+        }
+        return;
+      case 'U':
+        if constexpr (requires(const ReplaceOrderMessage& m) {
+                        handler_.OnReplaceOrderMessage(m);
+                      }) {
+          ReplaceOrderMessage message{
+              .original_reference_number = ReadBe64(&buf[11]),
+              .new_reference_number = ReadBe64(&buf[19]),
+              .timestamp = ReadBe48(&buf[5]),
+              .shares = ReadBe32(&buf[27]),
+              .price = ReadBe32(&buf[31]),
+              .stock_locate = ReadBe16(&buf[1])};
+          handler_.OnReplaceOrderMessage(message);
+        }
+        return;
+      default:
+        return;
+    }
   }
 };
 }  // namespace itch
