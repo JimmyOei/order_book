@@ -17,6 +17,26 @@ class CounterHandler {
 
   void OnMessage(unsigned char message_type) { counts_[message_type]++; }
 
+  void OnAddOrderMessage(const itch::AddOrderMessage& /*message*/) {
+    add_order_counts_++;
+  }
+
+  void OnCancelOrderMessage(const itch::CancelOrderMessage& /*message*/) {
+    cancel_order_counts_++;
+  }
+
+  void OnExecuteOrderMessage(const itch::ExecuteOrderMessage& /*message*/) {
+    execute_order_counts_++;
+  }
+
+  void OnDeleteOrderMessage(const itch::DeleteOrderMessage& /*message*/) {
+    delete_order_counts_++;
+  }
+
+  void OnReplaceOrderMessage(const itch::ReplaceOrderMessage& /*message*/) {
+    replace_order_counts_++;
+  }
+
   void PrintCounts() const {
     for (std::size_t i = 0; i < 256; i++) {
       if (counts_[i] > 0) {
@@ -24,10 +44,21 @@ class CounterHandler {
                   << counts_[i] << '\n';
       }
     }
+
+    std::cout << "Add Orders: " << add_order_counts_ << '\n';
+    std::cout << "Execute Orders: " << execute_order_counts_ << '\n';
+    std::cout << "Cancel Orders: " << cancel_order_counts_ << '\n';
+    std::cout << "Delete Orders: " << delete_order_counts_ << '\n';
+    std::cout << "Replace Orders: " << replace_order_counts_ << '\n';
   }
 
  private:
   std::array<uint64_t, 256> counts_{};
+  uint64_t add_order_counts_{};
+  uint64_t execute_order_counts_{};
+  uint64_t cancel_order_counts_{};
+  uint64_t delete_order_counts_{};
+  uint64_t replace_order_counts_{};
 };
 }  // namespace
 
