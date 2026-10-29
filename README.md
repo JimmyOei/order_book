@@ -82,3 +82,13 @@ clang-tidy -p build/debug src/tools/*.cc
 
 To suppress a single finding, put a justification comment and
 `// NOLINTNEXTLINE(<check-name>)` on the line above it.
+
+## Experiments
+
+### Timing Message Counter 32942ea
+`time ./build/release/counter data/12302019.NASDAQ_ITCH50`
+```sh
+real    0m9.616s
+user    0m2.246s
+sys     0m3.821s
+```
