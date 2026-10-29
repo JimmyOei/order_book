@@ -50,3 +50,24 @@ target_link_libraries(counter PRIVATE ob_options)
 target_include_directories(counter PRIVATE src)
 
 enable_testing()
+
+# ---------------------------------------------------------------------------
+# Tests — GoogleTest, fetched at configure time.
+# SYSTEM marks its headers as system headers, so our strict warnings
+# (-Wold-style-cast etc. + -Werror) don't fire on code we don't own.
+# ---------------------------------------------------------------------------
+include(FetchContent)
+FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.tar.gz
+    SYSTEM
+)
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+include(GoogleTest)
+
+add_executable(parser_test tests/parser_test.cc)
+target_link_libraries(parser_test PRIVATE ob_options GTest::gtest_main)
+target_include_directories(parser_test PRIVATE src)
+gtest_discover_tests(parser_test)
