@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug price_levels_test",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/debug/price_levels_test",
+      // Run a single test: change the filter, e.g. "PriceLevelsTest.BidKeepHighestPriceOnTop".
+      "args": ["--gtest_filter=PriceLevelsTest.*"],
+      "cwd": "${workspaceFolder}",
+      // Make ASan stop inside the debugger at the bad access instead of just exiting.
+      "environment": [
+        { "name": "ASAN_OPTIONS", "value": "abort_on_error=1:detect_leaks=0" }
+      ],
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "setupCommands": [
+        { "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "preLaunchTask": "build debug"
+    },
+    {
+      "name": "Debug parser_test",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/debug/parser_test",
+      "args": ["--gtest_filter=ParserTest.*"],
+      "cwd": "${workspaceFolder}",
+      "environment": [
+        { "name": "ASAN_OPTIONS", "value": "abort_on_error=1:detect_leaks=0" }
+      ],
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "setupCommands": [
+        { "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "preLaunchTask": "build debug"
+    }
+  ]
+}
