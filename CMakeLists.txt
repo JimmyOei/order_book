@@ -77,3 +77,9 @@ add_executable(price_levels_test tests/price_levels_test.cc)
 target_link_libraries(price_levels_test PRIVATE ob_options GTest::gtest_main)
 target_include_directories(price_levels_test PRIVATE src)
 gtest_discover_tests(price_levels_test)
+
+add_executable(order_table_test tests/order_table_test.cc)
+target_link_libraries(order_table_test PRIVATE ob_options GTest::gtest_main)
+target_include_directories(order_table_test PRIVATE src)
+# TIMEOUT: a broken probe or growth loop hangs instead of failing.
+gtest_discover_tests(order_table_test PROPERTIES TIMEOUT 30)
