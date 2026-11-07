@@ -50,6 +50,10 @@ add_executable(counter src/tools/message_counter.cc)
 target_link_libraries(counter PRIVATE ob_options)
 target_include_directories(counter PRIVATE src)
 
+add_executable(orderbook src/tools/order_book.cc)
+target_link_libraries(orderbook PRIVATE ob_options)
+target_include_directories(orderbook PRIVATE src)
+
 enable_testing()
 
 # ---------------------------------------------------------------------------
@@ -81,5 +85,9 @@ gtest_discover_tests(price_levels_test)
 add_executable(order_table_test tests/order_table_test.cc)
 target_link_libraries(order_table_test PRIVATE ob_options GTest::gtest_main)
 target_include_directories(order_table_test PRIVATE src)
-# TIMEOUT: a broken probe or growth loop hangs instead of failing.
 gtest_discover_tests(order_table_test PROPERTIES TIMEOUT 30)
+
+add_executable(order_book_handler_test tests/order_book_handler_test.cc)
+target_link_libraries(order_book_handler_test PRIVATE ob_options GTest::gtest_main)
+target_include_directories(order_book_handler_test PRIVATE src)
+gtest_discover_tests(order_book_handler_test)
