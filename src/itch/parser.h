@@ -111,6 +111,18 @@ class Parser {
     }
 
     switch (message_type) {
+      case 'R':
+        if constexpr (requires(const StockDirectoryMessage& m) {
+                        handler_.OnStockDirectoryMessage(m);
+                      }) {
+          StockDirectoryMessage message;
+          message.stock_locate = ReadBe16(&buf[1]);
+          message.timestamp = ReadBe48(&buf[5]);
+          std::memcpy(message.stock.data(), &buf[11], sizeof(message.stock));
+
+          handler_.OnStockDirectoryMessage(message);
+        }
+        return;
       case 'A':
       case 'F':
         if constexpr (requires(const AddOrderMessage& m) {

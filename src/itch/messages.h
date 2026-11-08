@@ -49,6 +49,13 @@ inline constexpr std::size_t kMaxMessageLength =
 
 enum class BuySellIndicator : uint8_t { kBuy = 'B', kSell = 'S' };
 
+// For message type "R"
+struct StockDirectoryMessage {
+  uint16_t stock_locate;
+  uint64_t timestamp;
+  std::array<char, 8> stock;
+};
+
 // For message types "A" and "F"
 struct AddOrderMessage {
   uint64_t reference_number;

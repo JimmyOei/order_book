@@ -2,7 +2,8 @@
  * order_book_handler_test.cc
  *
  * Unit tests for book::OrderBookHandler: each message type must update the
- * order table and the right price levels together.
+ * order table and the right price levels together, and books for different
+ * stocks (stock_locate) must stay independent while sharing one order table.
  */
 
 #include "book/order_book_handler.h"
@@ -11,6 +12,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -76,21 +78,21 @@ Levels ToPairs(const std::vector<book::PriceLevel>& levels) {
   return pairs;
 }
 
-// Best first.
-Levels Bids(const book::OrderBookHandler& book, std::size_t n = 10) {
-  return ToPairs(book.TopNBid(n));
+// Top 10 levels of one stock, best first.
+Levels Bids(const book::OrderBookHandler& book, uint16_t locate = kLocate) {
+  return ToPairs(book.TopNBid(locate, 10));
 }
 
-Levels Asks(const book::OrderBookHandler& book, std::size_t n = 10) {
-  return ToPairs(book.TopNAsk(n));
+Levels Asks(const book::OrderBookHandler& book, uint16_t locate = kLocate) {
+  return ToPairs(book.TopNAsk(locate, 10));
 }
 
 // Empty book
 
 TEST(OrderBookHandlerTest, NewBookIsEmpty) {
-  const book::OrderBookHandler book{kLocate};
-  EXPECT_FALSE(book.BestBid().has_value());
-  EXPECT_FALSE(book.BestAsk().has_value());
+  const book::OrderBookHandler book;
+  EXPECT_FALSE(book.BestBid(kLocate).has_value());
+  EXPECT_FALSE(book.BestAsk(kLocate).has_value());
   EXPECT_TRUE(Bids(book).empty());
   EXPECT_TRUE(Asks(book).empty());
 }
@@ -98,27 +100,27 @@ TEST(OrderBookHandlerTest, NewBookIsEmpty) {
 // Add (A / F)
 
 TEST(OrderBookHandlerTest, AddBuyGoesToBidsOnly) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
 
-  ASSERT_TRUE(book.BestBid().has_value());
-  EXPECT_EQ(book.BestBid()->price, 100U);
-  EXPECT_EQ(book.BestBid()->shares, 300U);
-  EXPECT_FALSE(book.BestAsk().has_value());
+  ASSERT_TRUE(book.BestBid(kLocate).has_value());
+  EXPECT_EQ(book.BestBid(kLocate)->price, 100U);
+  EXPECT_EQ(book.BestBid(kLocate)->shares, 300U);
+  EXPECT_FALSE(book.BestAsk(kLocate).has_value());
 }
 
 TEST(OrderBookHandlerTest, AddSellGoesToAsksOnly) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kSell, 105, 200));
 
-  ASSERT_TRUE(book.BestAsk().has_value());
-  EXPECT_EQ(book.BestAsk()->price, 105U);
-  EXPECT_EQ(book.BestAsk()->shares, 200U);
-  EXPECT_FALSE(book.BestBid().has_value());
+  ASSERT_TRUE(book.BestAsk(kLocate).has_value());
+  EXPECT_EQ(book.BestAsk(kLocate)->price, 105U);
+  EXPECT_EQ(book.BestAsk(kLocate)->shares, 200U);
+  EXPECT_FALSE(book.BestBid(kLocate).has_value());
 }
 
 TEST(OrderBookHandlerTest, OrdersAtSamePriceAreSummed) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnAddOrderMessage(Add(2, BuySellIndicator::kBuy, 100, 200));
 
@@ -126,7 +128,7 @@ TEST(OrderBookHandlerTest, OrdersAtSamePriceAreSummed) {
 }
 
 TEST(OrderBookHandlerTest, LevelsAreSortedBestFirstOnBothSides) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 99, 100));
   book.OnAddOrderMessage(Add(2, BuySellIndicator::kBuy, 101, 100));
   book.OnAddOrderMessage(Add(3, BuySellIndicator::kBuy, 100, 100));
@@ -139,7 +141,7 @@ TEST(OrderBookHandlerTest, LevelsAreSortedBestFirstOnBothSides) {
 }
 
 TEST(OrderBookHandlerTest, AddDuplicateRefThrows) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   EXPECT_THROW(book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 1)),
                std::runtime_error);
@@ -148,7 +150,7 @@ TEST(OrderBookHandlerTest, AddDuplicateRefThrows) {
 // Execute (E)
 
 TEST(OrderBookHandlerTest, PartialExecuteRemovesExecutedShares) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnExecuteOrderMessage(Execute(1, 100));
 
@@ -156,7 +158,7 @@ TEST(OrderBookHandlerTest, PartialExecuteRemovesExecutedShares) {
 }
 
 TEST(OrderBookHandlerTest, FullExecuteRemovesLevel) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kSell, 105, 300));
   book.OnExecuteOrderMessage(Execute(1, 300));
 
@@ -164,7 +166,7 @@ TEST(OrderBookHandlerTest, FullExecuteRemovesLevel) {
 }
 
 TEST(OrderBookHandlerTest, ExecutionsUntilEmptyRemoveOrderAndLevel) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnExecuteOrderMessage(Execute(1, 100));
   book.OnExecuteOrderMessage(Execute(1, 200));
@@ -175,7 +177,7 @@ TEST(OrderBookHandlerTest, ExecutionsUntilEmptyRemoveOrderAndLevel) {
 }
 
 TEST(OrderBookHandlerTest, ExecuteOneOrderLeavesOthersAtSameLevel) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnAddOrderMessage(Add(2, BuySellIndicator::kBuy, 100, 200));
   book.OnExecuteOrderMessage(Execute(1, 300));
@@ -184,7 +186,7 @@ TEST(OrderBookHandlerTest, ExecuteOneOrderLeavesOthersAtSameLevel) {
 }
 
 TEST(OrderBookHandlerTest, ExecuteTouchesOnlyTheOrdersLevel) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnAddOrderMessage(Add(2, BuySellIndicator::kBuy, 99, 300));
   book.OnAddOrderMessage(Add(3, BuySellIndicator::kSell, 101, 300));
@@ -195,12 +197,12 @@ TEST(OrderBookHandlerTest, ExecuteTouchesOnlyTheOrdersLevel) {
 }
 
 TEST(OrderBookHandlerTest, ExecuteUnknownRefThrows) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   EXPECT_THROW(book.OnExecuteOrderMessage(Execute(1, 100)), std::runtime_error);
 }
 
 TEST(OrderBookHandlerTest, ExecuteMoreThanHeldThrows) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   EXPECT_THROW(book.OnExecuteOrderMessage(Execute(1, 301)), std::runtime_error);
 }
@@ -208,7 +210,7 @@ TEST(OrderBookHandlerTest, ExecuteMoreThanHeldThrows) {
 // Cancel (X)
 
 TEST(OrderBookHandlerTest, PartialCancelRemovesCancelledShares) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kSell, 105, 300));
   book.OnCancelOrderMessage(Cancel(1, 120));
 
@@ -216,7 +218,7 @@ TEST(OrderBookHandlerTest, PartialCancelRemovesCancelledShares) {
 }
 
 TEST(OrderBookHandlerTest, FullCancelRemovesOrderAndLevel) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnCancelOrderMessage(Cancel(1, 300));
 
@@ -225,14 +227,14 @@ TEST(OrderBookHandlerTest, FullCancelRemovesOrderAndLevel) {
 }
 
 TEST(OrderBookHandlerTest, CancelUnknownRefThrows) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   EXPECT_THROW(book.OnCancelOrderMessage(Cancel(1, 100)), std::runtime_error);
 }
 
 // Delete (D)
 
 TEST(OrderBookHandlerTest, DeleteRemovesAllOfTheOrdersShares) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnAddOrderMessage(Add(2, BuySellIndicator::kBuy, 100, 200));
   book.OnDeleteOrderMessage(Delete(1));
@@ -241,7 +243,7 @@ TEST(OrderBookHandlerTest, DeleteRemovesAllOfTheOrdersShares) {
 }
 
 TEST(OrderBookHandlerTest, DeleteAfterPartialExecuteRemovesTheRest) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kSell, 105, 300));
   book.OnExecuteOrderMessage(Execute(1, 100));
   book.OnDeleteOrderMessage(Delete(1));
@@ -250,14 +252,14 @@ TEST(OrderBookHandlerTest, DeleteAfterPartialExecuteRemovesTheRest) {
 }
 
 TEST(OrderBookHandlerTest, DeleteUnknownRefThrows) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   EXPECT_THROW(book.OnDeleteOrderMessage(Delete(1)), std::runtime_error);
 }
 
 // Replace (U)
 
 TEST(OrderBookHandlerTest, ReplaceMovesSharesToNewPrice) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnReplaceOrderMessage(Replace(1, 2, 101, 400));
 
@@ -266,7 +268,7 @@ TEST(OrderBookHandlerTest, ReplaceMovesSharesToNewPrice) {
 }
 
 TEST(OrderBookHandlerTest, ReplaceKeepsSideOfOriginalOrder) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kSell, 105, 300));
   book.OnReplaceOrderMessage(Replace(1, 2, 106, 300));
 
@@ -275,7 +277,7 @@ TEST(OrderBookHandlerTest, ReplaceKeepsSideOfOriginalOrder) {
 }
 
 TEST(OrderBookHandlerTest, ReplaceAtSamePriceChangesShares) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnAddOrderMessage(Add(2, BuySellIndicator::kBuy, 100, 200));
   book.OnReplaceOrderMessage(Replace(1, 3, 100, 50));
@@ -284,7 +286,7 @@ TEST(OrderBookHandlerTest, ReplaceAtSamePriceChangesShares) {
 }
 
 TEST(OrderBookHandlerTest, ReplaceUsesRemainingSharesOfPartlyFilledOrder) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnAddOrderMessage(Add(2, BuySellIndicator::kBuy, 100, 200));
   book.OnExecuteOrderMessage(Execute(1, 100));  // order 1 now holds 200
@@ -294,7 +296,7 @@ TEST(OrderBookHandlerTest, ReplaceUsesRemainingSharesOfPartlyFilledOrder) {
 }
 
 TEST(OrderBookHandlerTest, ReplacedOrderLivesOnUnderNewRefOnly) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnReplaceOrderMessage(Replace(1, 2, 101, 400));
 
@@ -307,35 +309,155 @@ TEST(OrderBookHandlerTest, ReplacedOrderLivesOnUnderNewRefOnly) {
 }
 
 TEST(OrderBookHandlerTest, ReplaceUnknownRefThrows) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   EXPECT_THROW(book.OnReplaceOrderMessage(Replace(1, 2, 100, 100)),
                std::runtime_error);
 }
 
-// Other stocks
+// Several stocks
 
-TEST(OrderBookHandlerTest, IgnoresAllMessagesForOtherStocks) {
-  book::OrderBookHandler book{kLocate};
+TEST(OrderBookHandlerTest, UntouchedStockIsEmpty) {
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
 
-  // Same ref as our order, other stock: must not touch it, must not throw.
+  EXPECT_FALSE(book.BestBid(kOtherLocate).has_value());
+  EXPECT_FALSE(book.BestAsk(kOtherLocate).has_value());
+}
+
+TEST(OrderBookHandlerTest, AddsGoToTheirOwnStocksBook) {
+  book::OrderBookHandler book;
+  book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnAddOrderMessage(
-      Add(1, BuySellIndicator::kBuy, 100, 300, kOtherLocate));
+      Add(2, BuySellIndicator::kBuy, 100, 200, kOtherLocate));
   book.OnAddOrderMessage(
-      Add(2, BuySellIndicator::kSell, 105, 300, kOtherLocate));
-  book.OnExecuteOrderMessage(Execute(1, 100, kOtherLocate));
-  book.OnCancelOrderMessage(Cancel(1, 100, kOtherLocate));
-  book.OnReplaceOrderMessage(Replace(1, 3, 99, 10, kOtherLocate));
-  book.OnDeleteOrderMessage(Delete(1, kOtherLocate));
+      Add(3, BuySellIndicator::kSell, 105, 50, kOtherLocate));
 
   EXPECT_EQ(Bids(book), (Levels{{100, 300}}));
   EXPECT_TRUE(Asks(book).empty());
+  EXPECT_EQ(Bids(book, kOtherLocate), (Levels{{100, 200}}));
+  EXPECT_EQ(Asks(book, kOtherLocate), (Levels{{105, 50}}));
+}
+
+TEST(OrderBookHandlerTest, ExecuteChangesOnlyItsOwnStock) {
+  book::OrderBookHandler book;
+  book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
+  book.OnAddOrderMessage(
+      Add(2, BuySellIndicator::kBuy, 100, 300, kOtherLocate));
+  book.OnExecuteOrderMessage(Execute(2, 100, kOtherLocate));
+
+  EXPECT_EQ(Bids(book), (Levels{{100, 300}}));
+  EXPECT_EQ(Bids(book, kOtherLocate), (Levels{{100, 200}}));
+}
+
+TEST(OrderBookHandlerTest, CancelChangesOnlyItsOwnStock) {
+  book::OrderBookHandler book;
+  book.OnAddOrderMessage(Add(1, BuySellIndicator::kSell, 105, 300));
+  book.OnAddOrderMessage(
+      Add(2, BuySellIndicator::kSell, 105, 300, kOtherLocate));
+  book.OnCancelOrderMessage(Cancel(1, 120));
+
+  EXPECT_EQ(Asks(book), (Levels{{105, 180}}));
+  EXPECT_EQ(Asks(book, kOtherLocate), (Levels{{105, 300}}));
+}
+
+TEST(OrderBookHandlerTest, DeleteChangesOnlyItsOwnStock) {
+  book::OrderBookHandler book;
+  book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
+  book.OnAddOrderMessage(
+      Add(2, BuySellIndicator::kBuy, 100, 300, kOtherLocate));
+  book.OnDeleteOrderMessage(Delete(2, kOtherLocate));
+
+  EXPECT_EQ(Bids(book), (Levels{{100, 300}}));
+  EXPECT_TRUE(Bids(book, kOtherLocate).empty());
+}
+
+TEST(OrderBookHandlerTest, ReplaceStaysInItsOwnStock) {
+  book::OrderBookHandler book;
+  book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
+  book.OnAddOrderMessage(
+      Add(2, BuySellIndicator::kBuy, 100, 300, kOtherLocate));
+  book.OnReplaceOrderMessage(Replace(2, 3, 101, 400, kOtherLocate));
+
+  EXPECT_EQ(Bids(book), (Levels{{100, 300}}));
+  EXPECT_EQ(Bids(book, kOtherLocate), (Levels{{101, 400}}));
+}
+
+// Reference numbers are unique for the whole day across all stocks, which is
+// why one shared order table works. A repeat on another stock is a feed error.
+TEST(OrderBookHandlerTest, DuplicateRefOnOtherStockThrows) {
+  book::OrderBookHandler book;
+  book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
+  EXPECT_THROW(book.OnAddOrderMessage(
+                   Add(1, BuySellIndicator::kBuy, 100, 300, kOtherLocate)),
+               std::runtime_error);
+}
+
+TEST(OrderBookHandlerTest, ReplaceToRefUsedByOtherStockThrows) {
+  book::OrderBookHandler book;
+  book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
+  book.OnAddOrderMessage(
+      Add(2, BuySellIndicator::kBuy, 100, 300, kOtherLocate));
+  EXPECT_THROW(book.OnReplaceOrderMessage(Replace(1, 2, 101, 400)),
+               std::runtime_error);
+}
+
+// Every uint16_t value is a valid stock_locate, so both ends must work.
+// _GLIBCXX_ASSERTIONS (debug preset) turns an out-of-range index into an abort.
+TEST(OrderBookHandlerTest, LowestAndHighestLocateWork) {
+  constexpr uint16_t kLowest = 0;
+  constexpr uint16_t kHighest = std::numeric_limits<uint16_t>::max();
+  book::OrderBookHandler book;
+  book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300, kLowest));
+  book.OnAddOrderMessage(Add(2, BuySellIndicator::kSell, 105, 200, kHighest));
+
+  EXPECT_EQ(Bids(book, kLowest), (Levels{{100, 300}}));
+  EXPECT_EQ(Asks(book, kHighest), (Levels{{105, 200}}));
+
+  book.OnDeleteOrderMessage(Delete(1, kLowest));
+  book.OnDeleteOrderMessage(Delete(2, kHighest));
+  EXPECT_TRUE(Bids(book, kLowest).empty());
+  EXPECT_TRUE(Asks(book, kHighest).empty());
+}
+
+// Messages for several stocks interleaved, as in the real feed.
+TEST(OrderBookHandlerTest, InterleavedStocksStayConsistentAndEndEmpty) {
+  constexpr uint16_t kThirdLocate = 5291;
+  book::OrderBookHandler book;
+  book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
+  book.OnAddOrderMessage(
+      Add(2, BuySellIndicator::kBuy, 100, 400, kOtherLocate));
+  book.OnAddOrderMessage(
+      Add(3, BuySellIndicator::kSell, 2000, 10, kThirdLocate));
+  book.OnAddOrderMessage(Add(4, BuySellIndicator::kSell, 102, 200));
+  book.OnExecuteOrderMessage(Execute(2, 150, kOtherLocate));
+  book.OnReplaceOrderMessage(Replace(1, 5, 101, 250));
+  book.OnCancelOrderMessage(Cancel(3, 4, kThirdLocate));
+  book.OnAddOrderMessage(
+      Add(6, BuySellIndicator::kBuy, 99, 100, kOtherLocate));
+
+  EXPECT_EQ(Bids(book), (Levels{{101, 250}}));
+  EXPECT_EQ(Asks(book), (Levels{{102, 200}}));
+  EXPECT_EQ(Bids(book, kOtherLocate), (Levels{{100, 250}, {99, 100}}));
+  EXPECT_TRUE(Asks(book, kOtherLocate).empty());
+  EXPECT_EQ(Asks(book, kThirdLocate), (Levels{{2000, 6}}));
+  EXPECT_TRUE(Bids(book, kThirdLocate).empty());
+
+  book.OnDeleteOrderMessage(Delete(5));
+  book.OnExecuteOrderMessage(Execute(4, 200));
+  book.OnCancelOrderMessage(Cancel(2, 250, kOtherLocate));
+  book.OnDeleteOrderMessage(Delete(6, kOtherLocate));
+  book.OnExecuteOrderMessage(Execute(3, 6, kThirdLocate));
+
+  for (const uint16_t locate : {kLocate, kOtherLocate, kThirdLocate}) {
+    EXPECT_TRUE(Bids(book, locate).empty()) << "locate " << locate;
+    EXPECT_TRUE(Asks(book, locate).empty()) << "locate " << locate;
+  }
 }
 
 // A short day: everything added is removed again, so the book ends empty.
 
 TEST(OrderBookHandlerTest, MixedSequenceEndsEmpty) {
-  book::OrderBookHandler book{kLocate};
+  book::OrderBookHandler book;
   book.OnAddOrderMessage(Add(1, BuySellIndicator::kBuy, 100, 300));
   book.OnAddOrderMessage(Add(2, BuySellIndicator::kSell, 102, 200));
   book.OnAddOrderMessage(Add(3, BuySellIndicator::kBuy, 101, 100));
