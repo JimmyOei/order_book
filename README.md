@@ -6,11 +6,12 @@ This is a personal project on learning how to work with NASDAQ TotalView ITCH 5.
 
 Each tool is a small executable in `src/tools/` built on the shared ITCH parser
 in `src/itch/`. All tools take the path to a raw (decompressed) ITCH 5.0 file
-as their only argument.
+as their first argument.
 
-| Tool      | Source                         | What it does                                                                                               |
-|-----------|--------------------------------|------------------------------------------------------------------------------------------------------------|
-| `counter` | `src/tools/message_counter.cc` | Prints how many messages of each type were in the binary. |
+| Tool        | Source                         | What it does                                                                                               |
+|-------------|--------------------------------|------------------------------------------------------------------------------------------------------------|
+| `counter`   | `src/tools/message_counter.cc` | Prints how many messages of each type were in the binary. |
+| `orderbook` | `src/tools/order_book.cc`      | Builds the book for every symbol and prints the top 5 levels of one ticker (second argument, e.g. `AAPL`) at fixed times of day. |
 
 ## Prerequisites
 
@@ -85,10 +86,16 @@ To suppress a single finding, put a justification comment and
 
 ## Experiments
 
-### Timing Message Counter 32942ea
-`time ./build/release/counter data/12302019.NASDAQ_ITCH50`
-```sh
-real    0m9.616s
-user    0m2.246s
-sys     0m3.821s
-```
+### Timing Message Counter
+
+| Command                           | real   | user   | sys   |
+|-----------------------------------|--------|--------|-------|
+| `counter 12302019.NASDAQ_ITCH50` (run 1)                 | 10.3 s | 2.5 s  | 4.8 s |
+| `counter 12302019.NASDAQ_ITCH50` (run 2)                 | 9.2 s  | 2.4 s  | 3.7 s |
+
+### Timing all-symbols Order Book
+
+| Command                           | real   | user   | sys   |
+|-----------------------------------|--------|--------|-------|
+| `orderbook 12302019.NASDAQ_ITCH50 AAPL`              | 38.9 s | 32.7 s | 5.9 s |
+| `orderbook 12302019.NASDAQ_ITCH50 MSFT`              | 41.1 s | 35.8 s | 5.3 s |

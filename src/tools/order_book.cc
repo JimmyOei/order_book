@@ -12,6 +12,8 @@
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -89,7 +91,6 @@ class SnapshotPrinter {
         snapshots_(std::move(snapshots)) {}
 
   void OnStockDirectoryMessage(const itch::StockDirectoryMessage& message) {
-    BeforeMessage(message.timestamp);
     if (message.stock == stock_) {
       stock_locate_ = message.stock_locate;
     }
@@ -120,28 +121,29 @@ class SnapshotPrinter {
     order_book_.OnReplaceOrderMessage(message);
   }
 
-  [[nodiscard]] uint64_t LastTimestamp() const { return last_timestamp_; }
-
  private:
   book::OrderBookHandler& order_book_;
   std::array<char, 8> stock_;
   std::vector<Snapshot> snapshots_;
   std::size_t next_ = 0;
-  uint64_t last_timestamp_ = 0;
   std::optional<uint16_t> stock_locate_;
 
   void BeforeMessage(uint64_t timestamp) {
-    last_timestamp_ = timestamp;
+    if (!stock_locate_.has_value()) {
+      // Assumes all Stock Directory messages are read before first
+      // BeforeMessage call, so stock_locate should have a value
+      const std::string_view padded(stock_.data(), stock_.size());
+      const std::string_view ticker =
+          padded.substr(0, padded.find_last_not_of(' ') + 1);
+      throw std::runtime_error(
+          "Unknown ticker '" + std::string(ticker) +
+          "', could not find a Stock Directory message for it.");
+    }
+
     while (next_ < snapshots_.size() &&
            timestamp >= snapshots_[next_].timestamp) {
-      if (stock_locate_.has_value()) {
-        PrintBook(std::cout, order_book_, stock_locate_.value(),
-                  snapshots_[next_].label, snapshots_[next_].timestamp);
-      } else {
-        std::cout << "Could not print order book for "
-                  << std::string_view(stock_.data(), stock_.size())
-                  << " since we don't know its stock_locate yet.\n";
-      }
+      PrintBook(std::cout, order_book_, stock_locate_.value(),
+                snapshots_[next_].label, snapshots_[next_].timestamp);
       ++next_;
     }
   }
@@ -166,11 +168,13 @@ int main(int argc, char* argv[]) {
     book::OrderBookHandler order_book;
     std::array<char, 8> stock{};
     std::string_view stock_arg{argv[2]};
-    if (stock_arg.size() > 8) {
-      throw std::runtime_error("Given stock ticket is too large");
+    if (stock_arg.size() > stock.size()) {
+      throw std::runtime_error("Ticker '" + std::string(stock_arg) +
+                               "' is longer than " +
+                               std::to_string(stock.size()) + " characters.");
     }
     std::ranges::copy(stock_arg, stock.begin());
-    for (std::size_t i = stock_arg.size(); i < 8; i++) {
+    for (std::size_t i = stock_arg.size(); i < stock.size(); i++) {
       stock[i] = ' ';
     }
 

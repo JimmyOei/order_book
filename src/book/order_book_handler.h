@@ -16,7 +16,7 @@
 #include "itch/messages.h"
 
 namespace book {
-// 2^24 Based on peak of ~6.1M live orders on 1230219.NASDAQ_ITCH50
+// 2^24 Based on peak of ~6.1M live orders on 12302019.NASDAQ_ITCH50
 inline constexpr std::size_t kOrderTableCapacity = 16777216;
 
 struct OrderBook {
@@ -26,8 +26,9 @@ struct OrderBook {
 
 class OrderBookHandler {
  public:
-  explicit OrderBookHandler()
-      : order_table_(kOrderTableCapacity), books_(UINT16_MAX + 1) {};
+  explicit OrderBookHandler(
+      std::size_t order_table_capacity = kOrderTableCapacity)
+      : order_table_(order_table_capacity), books_(UINT16_MAX + 1) {}
 
   void OnAddOrderMessage(const itch::AddOrderMessage& message) {
     order_table_.Insert(message.reference_number, message.price, message.shares,
