@@ -16,104 +16,93 @@
 #include "itch/messages.h"
 
 namespace book {
+// 2^24 Based on peak of ~6.1M live orders on 12302019.NASDAQ_ITCH50
+inline constexpr std::size_t kOrderTableCapacity = 16777216;
+
+struct OrderBook {
+  book::PriceLevels<itch::BuySellIndicator::kBuy> bid;
+  book::PriceLevels<itch::BuySellIndicator::kSell> ask;
+};
+
 class OrderBookHandler {
  public:
-  explicit OrderBookHandler(uint16_t stock_locate)
-      : stock_locate_(stock_locate), order_table_(1024) {};
+  explicit OrderBookHandler(
+      std::size_t order_table_capacity = kOrderTableCapacity)
+      : order_table_(order_table_capacity), books_(UINT16_MAX + 1) {}
 
   void OnAddOrderMessage(const itch::AddOrderMessage& message) {
-    if (message.stock_locate != stock_locate_) {
-      return;
-    }
-
     order_table_.Insert(message.reference_number, message.price, message.shares,
                         message.buy_sell_indicator);
     if (message.buy_sell_indicator == itch::BuySellIndicator::kBuy) {
-      bids_.Add(message.price, message.shares);
+      books_[message.stock_locate].bid.Add(message.price, message.shares);
     } else {
-      asks_.Add(message.price, message.shares);
+      books_[message.stock_locate].ask.Add(message.price, message.shares);
     }
   }
 
   void OnCancelOrderMessage(const itch::CancelOrderMessage& message) {
-    if (message.stock_locate != stock_locate_) {
-      return;
-    }
-
     OrderEntry order =
         order_table_.Reduce(message.reference_number, message.shares);
     if (order.buy_sell_indicator == itch::BuySellIndicator::kBuy) {
-      bids_.Reduce(order.price, message.shares);
+      books_[message.stock_locate].bid.Reduce(order.price, message.shares);
     } else {
-      asks_.Reduce(order.price, message.shares);
+      books_[message.stock_locate].ask.Reduce(order.price, message.shares);
     }
   }
 
   void OnExecuteOrderMessage(const itch::ExecuteOrderMessage& message) {
-    if (message.stock_locate != stock_locate_) {
-      return;
-    }
-
     OrderEntry order =
         order_table_.Reduce(message.reference_number, message.shares);
     if (order.buy_sell_indicator == itch::BuySellIndicator::kBuy) {
-      bids_.Reduce(order.price, message.shares);
+      books_[message.stock_locate].bid.Reduce(order.price, message.shares);
     } else {
-      asks_.Reduce(order.price, message.shares);
+      books_[message.stock_locate].ask.Reduce(order.price, message.shares);
     }
   }
 
   void OnDeleteOrderMessage(const itch::DeleteOrderMessage& message) {
-    if (message.stock_locate != stock_locate_) {
-      return;
-    }
-
     OrderEntry order = order_table_.Delete(message.reference_number);
     if (order.buy_sell_indicator == itch::BuySellIndicator::kBuy) {
-      bids_.Reduce(order.price, order.shares);
+      books_[message.stock_locate].bid.Reduce(order.price, order.shares);
     } else {
-      asks_.Reduce(order.price, order.shares);
+      books_[message.stock_locate].ask.Reduce(order.price, order.shares);
     }
   }
 
   void OnReplaceOrderMessage(const itch::ReplaceOrderMessage& message) {
-    if (message.stock_locate != stock_locate_) {
-      return;
-    }
-
     OrderEntry order = order_table_.Delete(message.original_reference_number);
     order_table_.Insert(message.new_reference_number, message.price,
                         message.shares, order.buy_sell_indicator);
     if (order.buy_sell_indicator == itch::BuySellIndicator::kBuy) {
-      bids_.Reduce(order.price, order.shares);
-      bids_.Add(message.price, message.shares);
+      books_[message.stock_locate].bid.Reduce(order.price, order.shares);
+      books_[message.stock_locate].bid.Add(message.price, message.shares);
     } else {
-      asks_.Reduce(order.price, order.shares);
-      asks_.Add(message.price, message.shares);
+      books_[message.stock_locate].ask.Reduce(order.price, order.shares);
+      books_[message.stock_locate].ask.Add(message.price, message.shares);
     }
   }
 
-  [[nodiscard]] std::optional<PriceLevel> BestBid() const {
-    return bids_.GetTop();
+  [[nodiscard]] std::optional<PriceLevel> BestBid(uint16_t stock_locate) const {
+    return books_[stock_locate].bid.GetTop();
   }
 
-  [[nodiscard]] std::optional<PriceLevel> BestAsk() const {
-    return asks_.GetTop();
+  [[nodiscard]] std::optional<PriceLevel> BestAsk(uint16_t stock_locate) const {
+    return books_[stock_locate].ask.GetTop();
   }
 
-  [[nodiscard]] std::vector<PriceLevel> TopNBid(std::size_t n) const {
-    return bids_.GetTopN(n);
+  [[nodiscard]] std::vector<PriceLevel> TopNBid(uint16_t stock_locate,
+                                                std::size_t n) const {
+    return books_[stock_locate].bid.GetTopN(n);
   }
 
-  [[nodiscard]] std::vector<PriceLevel> TopNAsk(std::size_t n) const {
-    return asks_.GetTopN(n);
+  [[nodiscard]] std::vector<PriceLevel> TopNAsk(uint16_t stock_locate,
+                                                std::size_t n) const {
+    return books_[stock_locate].ask.GetTopN(n);
   }
 
  private:
-  uint16_t stock_locate_;
   book::OrderTable order_table_;
-  book::PriceLevels<itch::BuySellIndicator::kBuy> bids_{};
-  book::PriceLevels<itch::BuySellIndicator::kSell> asks_{};
+  std::vector<OrderBook> books_;
 };
 }  // namespace book
 

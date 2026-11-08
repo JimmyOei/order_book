@@ -1,8 +1,8 @@
 /**
  * order_book.cc
  *
- * Keeps an order book for AAPL from the TotalView-ITCH 5.0 binary file and
- * prints the top of the book at fixed times of day and at the end.
+ * Keeps an order book for all stocks from the TotalView-ITCH 5.0 binary file
+ * and prints the top of the book of given stock at fixed times of day.
  */
 
 #include <array>
@@ -12,6 +12,8 @@
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -21,8 +23,6 @@
 
 namespace {
 
-constexpr uint16_t kStockLocate =
-    13;  // AAPL stock locate for 12302019.NASDAQ_ITCH50.
 constexpr std::size_t kLevelsToPrint = 5;
 
 // ITCH timestamps are nanoseconds since midnight (New York time).
@@ -56,9 +56,11 @@ void PrintLevel(std::ostream& out, const std::vector<book::PriceLevel>& levels,
 }
 
 void PrintBook(std::ostream& out, const book::OrderBookHandler& order_book,
-               const char* label, uint64_t timestamp) {
-  const std::vector<book::PriceLevel> bids = order_book.TopNBid(kLevelsToPrint);
-  const std::vector<book::PriceLevel> asks = order_book.TopNAsk(kLevelsToPrint);
+               uint16_t stock_locate, const char* label, uint64_t timestamp) {
+  const std::vector<book::PriceLevel> bids =
+      order_book.TopNBid(stock_locate, kLevelsToPrint);
+  const std::vector<book::PriceLevel> asks =
+      order_book.TopNAsk(stock_locate, kLevelsToPrint);
 
   out << "=== " << label << " (";
   PrintTime(out, timestamp);
@@ -82,9 +84,17 @@ class SnapshotPrinter {
     uint64_t timestamp;
   };
 
-  SnapshotPrinter(book::OrderBookHandler& order_book,
+  SnapshotPrinter(book::OrderBookHandler& order_book, std::array<char, 8> stock,
                   std::vector<Snapshot> snapshots)
-      : order_book_(order_book), snapshots_(std::move(snapshots)) {}
+      : order_book_(order_book),
+        stock_(stock),
+        snapshots_(std::move(snapshots)) {}
+
+  void OnStockDirectoryMessage(const itch::StockDirectoryMessage& message) {
+    if (message.stock == stock_) {
+      stock_locate_ = message.stock_locate;
+    }
+  }
 
   void OnAddOrderMessage(const itch::AddOrderMessage& message) {
     BeforeMessage(message.timestamp);
@@ -111,20 +121,29 @@ class SnapshotPrinter {
     order_book_.OnReplaceOrderMessage(message);
   }
 
-  [[nodiscard]] uint64_t LastTimestamp() const { return last_timestamp_; }
-
  private:
   book::OrderBookHandler& order_book_;
+  std::array<char, 8> stock_;
   std::vector<Snapshot> snapshots_;
   std::size_t next_ = 0;
-  uint64_t last_timestamp_ = 0;
+  std::optional<uint16_t> stock_locate_;
 
   void BeforeMessage(uint64_t timestamp) {
-    last_timestamp_ = timestamp;
+    if (!stock_locate_.has_value()) {
+      // Assumes all Stock Directory messages are read before first
+      // BeforeMessage call, so stock_locate should have a value
+      const std::string_view padded(stock_.data(), stock_.size());
+      const std::string_view ticker =
+          padded.substr(0, padded.find_last_not_of(' ') + 1);
+      throw std::runtime_error(
+          "Unknown ticker '" + std::string(ticker) +
+          "', could not find a Stock Directory message for it.");
+    }
+
     while (next_ < snapshots_.size() &&
            timestamp >= snapshots_[next_].timestamp) {
-      PrintBook(std::cout, order_book_, snapshots_[next_].label,
-                snapshots_[next_].timestamp);
+      PrintBook(std::cout, order_book_, stock_locate_.value(),
+                snapshots_[next_].label, snapshots_[next_].timestamp);
       ++next_;
     }
   }
@@ -139,10 +158,29 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  if (argc < 3) {
+    std::cerr << "Please provide the stock ticker to see the order book for."
+              << '\n';
+    return 1;
+  }
+
   try {
-    book::OrderBookHandler order_book{kStockLocate};
+    book::OrderBookHandler order_book;
+    std::array<char, 8> stock{};
+    std::string_view stock_arg{argv[2]};
+    if (stock_arg.size() > stock.size()) {
+      throw std::runtime_error("Ticker '" + std::string(stock_arg) +
+                               "' is longer than " +
+                               std::to_string(stock.size()) + " characters.");
+    }
+    std::ranges::copy(stock_arg, stock.begin());
+    for (std::size_t i = stock_arg.size(); i < stock.size(); i++) {
+      stock[i] = ' ';
+    }
+
     SnapshotPrinter printer{
         order_book,
+        stock,
         {
             {.label = "Open", .timestamp = TimeOfDay(9, 30, 0)},
             {.label = "Midday", .timestamp = TimeOfDay(12, 0, 0)},
@@ -173,8 +211,6 @@ int main(int argc, char* argv[]) {
     if (parser.HasPendingBytes()) {
       throw std::runtime_error("File is truncated, expected more data.");
     }
-
-    PrintBook(std::cout, order_book, "End of file", printer.LastTimestamp());
   } catch (const std::exception& e) {
     std::cerr << e.what() << '\n';
     return 1;
