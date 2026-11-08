@@ -17,8 +17,13 @@ class CounterHandler {
 
   void OnMessage(unsigned char message_type) { counts_[message_type]++; }
 
-  void OnAddOrderMessage(const itch::AddOrderMessage& /*message*/) {
+  void OnAddOrderMessage(const itch::AddOrderMessage& message) {
+    // std::cout << message.reference_number << '\n';
+    min_ref_ = std::min(min_ref_, message.reference_number);
+    max_ref_ = std::max(max_ref_, message.reference_number);
     add_order_counts_++;
+    live_count_++;
+    peak_live_count_ = std::max(peak_live_count_, live_count_);
   }
 
   void OnCancelOrderMessage(const itch::CancelOrderMessage& /*message*/) {
@@ -31,6 +36,7 @@ class CounterHandler {
 
   void OnDeleteOrderMessage(const itch::DeleteOrderMessage& /*message*/) {
     delete_order_counts_++;
+    live_count_--;
   }
 
   void OnReplaceOrderMessage(const itch::ReplaceOrderMessage& /*message*/) {
@@ -50,6 +56,12 @@ class CounterHandler {
     std::cout << "Cancel Orders: " << cancel_order_counts_ << '\n';
     std::cout << "Delete Orders: " << delete_order_counts_ << '\n';
     std::cout << "Replace Orders: " << replace_order_counts_ << '\n';
+    std::cout << "Min Ref: " << min_ref_ << '\n';
+    std::cout << "Max Ref: " << max_ref_ << '\n';
+    std::cout
+        << "Peak Live Count: " << peak_live_count_
+        << "(Note, E/C types are not accounted for, this is an upper bound)"
+        << '\n';
   }
 
  private:
@@ -59,6 +71,10 @@ class CounterHandler {
   uint64_t cancel_order_counts_{};
   uint64_t delete_order_counts_{};
   uint64_t replace_order_counts_{};
+  uint64_t min_ref_ = UINT64_MAX;
+  uint64_t max_ref_{};
+  uint64_t live_count_{};
+  uint64_t peak_live_count_{};
 };
 }  // namespace
 

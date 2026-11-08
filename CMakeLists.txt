@@ -29,6 +29,7 @@ if(OB_SANITIZERS)
     target_compile_options(ob_options INTERFACE
         -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
     target_link_options(ob_options INTERFACE -fsanitize=address,undefined)
+    target_compile_definitions(ob_options INTERFACE _GLIBCXX_ASSERTIONS)
 endif()
 
 if(OB_NATIVE)
@@ -48,6 +49,10 @@ target_compile_options(ob_options INTERFACE
 add_executable(counter src/tools/message_counter.cc)
 target_link_libraries(counter PRIVATE ob_options)
 target_include_directories(counter PRIVATE src)
+
+add_executable(orderbook src/tools/order_book.cc)
+target_link_libraries(orderbook PRIVATE ob_options)
+target_include_directories(orderbook PRIVATE src)
 
 enable_testing()
 
@@ -71,3 +76,18 @@ add_executable(parser_test tests/parser_test.cc)
 target_link_libraries(parser_test PRIVATE ob_options GTest::gtest_main)
 target_include_directories(parser_test PRIVATE src)
 gtest_discover_tests(parser_test)
+
+add_executable(price_levels_test tests/price_levels_test.cc)
+target_link_libraries(price_levels_test PRIVATE ob_options GTest::gtest_main)
+target_include_directories(price_levels_test PRIVATE src)
+gtest_discover_tests(price_levels_test)
+
+add_executable(order_table_test tests/order_table_test.cc)
+target_link_libraries(order_table_test PRIVATE ob_options GTest::gtest_main)
+target_include_directories(order_table_test PRIVATE src)
+gtest_discover_tests(order_table_test PROPERTIES TIMEOUT 30)
+
+add_executable(order_book_handler_test tests/order_book_handler_test.cc)
+target_link_libraries(order_book_handler_test PRIVATE ob_options GTest::gtest_main)
+target_include_directories(order_book_handler_test PRIVATE src)
+gtest_discover_tests(order_book_handler_test)
